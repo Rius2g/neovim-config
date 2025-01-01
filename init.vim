@@ -17,6 +17,7 @@ Plug 'nvim-tree/nvim-tree.lua'
 " Fuzzy finder
 Plug 'nvim-telescope/telescope.nvim'
 Plug 'nvim-lua/plenary.nvim'
+Plug 'nvim-telescope/telescope-file-browser.nvim'
 " Syntax highlighting
 Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 " GitHub Copilot
@@ -62,6 +63,9 @@ colorscheme nightfly
 let g:nightflycursorcolor = 1
 let g:nightflyitalics = 1
 
+" Set the leader key
+let mapleader = " " " Use space as the leader key
+
 " Enhanced keybindings
 nnoremap <C-n> :NvimTreeToggle<CR>
 nnoremap <C-p> :Telescope find_files<CR>
@@ -85,8 +89,6 @@ lua << EOF
 local nvim_lsp = require('lspconfig')
 -- Go
 nvim_lsp.gopls.setup{}
--- Rust
-nvim_lsp.rust_analyzer.setup{}
 -- C/C++
 nvim_lsp.clangd.setup{}
 -- TypeScript/React
@@ -139,11 +141,11 @@ require("bufferline").setup{
         left_mouse_command = "buffer %d",
         middle_mouse_command = nil,
         indicator = {
-            icon = '▎',
+            icon = '›',
             style = 'icon',
         },
         buffer_close_icon = '',
-        modified_icon = '●',
+        modified_icon = '•',
         close_icon = '',
         left_trunc_marker = '',
         right_trunc_marker = '',
@@ -151,18 +153,11 @@ require("bufferline").setup{
         max_prefix_length = 15,
         tab_size = 18,
         diagnostics = "nvim_lsp",
-        custom_filter = function(buf_number)
-            if vim.bo[buf_number].filetype ~= "qf" then
-                return true
-            end
-        end,
         show_buffer_icons = true,
         show_buffer_close_icons = true,
         show_close_icon = true,
         show_tab_indicators = true,
-        persist_buffer_sort = true,
         separator_style = "thin",
-        enforce_regular_tabs = true,
         always_show_bufferline = true,
     }
 }
@@ -170,7 +165,7 @@ require("bufferline").setup{
 -- Configure Gitsigns
 require('gitsigns').setup()
 
--- Configure lualine for a more badass statusline
+-- Configure lualine
 require('lualine').setup {
   options = {
     theme = 'nightfly',
@@ -178,12 +173,12 @@ require('lualine').setup {
     section_separators = { left = '', right = ''},
   },
   sections = {
-    lualine_a = {{'mode', separator = { left = '', right = ''}, right_padding = 2}},
-    lualine_b = {{'branch', icon = ''}, 'diff', 'diagnostics'},
+    lualine_a = {'mode'},
+    lualine_b = {'branch', 'diff', 'diagnostics'},
     lualine_c = {'filename'},
     lualine_x = {'encoding', 'fileformat', 'filetype'},
     lualine_y = {'progress'},
-    lualine_z = {{'location', separator = { left = '', right = ''}, left_padding = 2}}
+    lualine_z = {'location'}
   },
 }
 
@@ -217,43 +212,59 @@ require("twilight").setup {
 
 -- Configure Colorizer
 require'colorizer'.setup()
-vim.api.nvim_create_autocmd("TermOpen", {
-  callback = function()
-    local opts = {buffer = 0}
-    vim.keymap.set('t', '<esc>', [[<C-\><C-n>]], opts)
-    vim.keymap.set('t', '<C-h>', [[<Cmd>wincmd h<CR>]], opts)
-    vim.keymap.set('t', '<C-j>', [[<Cmd>wincmd j<CR>]], opts)
-    vim.keymap.set('t', '<C-k>', [[<Cmd>wincmd k<CR>]], opts)
-    vim.keymap.set('t', '<C-l>', [[<Cmd>wincmd l<CR>]], opts)
-    vim.keymap.set('t', '<C-w>', [[<C-\><C-n><C-w>]], opts)
-  end,
-  group = vim.api.nvim_create_augroup("TerminalMappings", {clear = true}),
-})
 
--- Define a custom command to open a terminal in a vertical split
-vim.api.nvim_create_user_command('Vterm', function(opts)
-    -- Calculate the width of the new terminal split
-    local width = 120  -- Default width
-    if opts.args ~= "" then
-        width = tonumber(opts.args) or 120
-    end
+-- Configure Telescope and File Browser
+require('telescope').setup {
+  defaults = {
+    mappings = {
+      i = {
+        ["<C-h>"] = "which_key", -- Show key mappings in Telescope
+      },
+    },
+  },
+  extensions = {
+    file_browser = {
+      hijack_netrw = true, -- Disable netrw and use Telescope File Browser
+    },
+  },
+}
 
-    -- Open a vertical split
-    vim.cmd('vsplit')
+-- Load Telescope Extensions
+require('telescope').load_extension('file_browser')
 
-    -- Resize the split to the specified width
-    vim.cmd('vertical resize ' .. width)
+-- Keybindings for Telescope File Browser
+vim.keymap.set('n', '<leader>fb', '<cmd>Telescope file_browser<CR>', { desc = "Open File Browser" })
+vim.keymap.set('n', '<leader>fd', '<cmd>Telescope file_browser path=%:p:h select_buffer=true<CR>', { desc = "Open File Browser in Current Directory" })
 
-    -- Open terminal in the new split
-    vim.cmd('terminal')
+-- Telescope LSP Keybindings
+vim.keymap.set('n', 'gd', function()
+  require('telescope.builtin').lsp_definitions({
+    fname_width = 50,
+  })
+end, { desc = "Go to Definition" })
 
-    -- Optional: Switch to insert mode automatically
-    vim.cmd('startinsert')
-end, { nargs = '?', desc = 'Open a terminal in a vertical split' })
+vim.keymap.set('n', 'gr', function()
+  require('telescope.builtin').lsp_references({
+    fname_width = 50,
+    include_declaration = false,
+  })
+end, { desc = "Find References" })
 
--- Optional: Create a keymap for quick access
-vim.keymap.set('n', '<leader>vt', ':Vterm<CR>', { noremap = true, silent = true, desc = 'Open vertical terminal' })
+vim.keymap.set('n', 'gi', function()
+  require('telescope.builtin').lsp_implementations({
+    fname_width = 50,
+  })
+end, { desc = "Find Implementations" })
 
--- Add a mapping to easily close terminal buffer from normal mode
-vim.keymap.set('n', '<leader>tc', ':bdelete!<CR>', { noremap = true, silent = true, desc = 'Close terminal buffer' })
+vim.keymap.set('n', '<leader>ds', function()
+  require('telescope.builtin').lsp_document_symbols()
+end, { desc = "Document Symbols" })
+
+vim.keymap.set('n', '<leader>ws', function()
+  require('telescope.builtin').lsp_workspace_symbols({
+    query = vim.fn.input("Symbol Query: "),
+  })
+end, { desc = "Workspace Symbols" })
+
 EOF
+
