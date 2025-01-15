@@ -9,6 +9,7 @@ Plug 'hrsh7th/nvim-cmp'
 Plug 'hrsh7th/cmp-nvim-lsp'
 Plug 'hrsh7th/cmp-buffer'
 Plug 'hrsh7th/cmp-path'
+
 " Snippets
 Plug 'L3MON4D3/LuaSnip'
 Plug 'saadparwaiz1/cmp_luasnip'
@@ -41,6 +42,9 @@ Plug 'lewis6991/gitsigns.nvim'
 Plug 'folke/zen-mode.nvim'
 Plug 'folke/twilight.nvim'
 Plug 'norcalli/nvim-colorizer.lua'
+Plug 'jose-elias-alvarez/null-ls.nvim'
+Plug 'nvim-lua/plenary.nvim'
+
 call plug#end()
 
 " Basic settings
@@ -92,7 +96,7 @@ nvim_lsp.gopls.setup{}
 -- C/C++
 nvim_lsp.clangd.setup{}
 -- TypeScript/React
-nvim_lsp.tsserver.setup{}
+nvim_lsp.ts_ls.setup{}
 
 -- Autocompletion setup
 local cmp = require'cmp'
@@ -127,10 +131,33 @@ vim.g.dashboard_custom_section = {
     e = {description = {'  Settings           '}, command = ':e ~/.config/nvim/init.vim'}
 }
 
-vim.g.dashboard_custom_footer = {'Do one thing, do it well - Unix philosophy'}
+vim.g.dashboard_custom_footer = {'Lets get some money in the room - Lewis Reneri'}
+
 
 -- Configure WhichKey
 require("which-key").setup {}
+
+local null_ls = require("null-ls")
+
+local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+
+null_ls.setup({
+sources = {
+    null_ls.builtins.formatting.prettier,
+    },
+    on_attach = function(client, bufnr)
+       if client.supports_method("textDocument/formatting") then
+            vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+            vim.api.nvim_create_autocmd("BufWritePre", {
+                group = augroup,
+                buffer = bufnr,
+                callback = function()
+                    vim.lsp.buf.format({ bufnr = bufnr })
+                end,
+            })
+        end
+    end,
+})
 
 -- Configure Bufferline
 require("bufferline").setup{
@@ -231,6 +258,15 @@ require('telescope').setup {
 
 -- Load Telescope Extensions
 require('telescope').load_extension('file_browser')
+
+vim.api.nvim_create_user_command(
+'E',
+function()
+require('telescope.builtin').find_files()
+end,
+{desc = "Open Telescope file finder"}
+)
+
 
 -- Keybindings for Telescope File Browser
 vim.keymap.set('n', '<leader>fb', '<cmd>Telescope file_browser<CR>', { desc = "Open File Browser" })
