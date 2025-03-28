@@ -66,6 +66,7 @@ set cursorline
 set hidden
 set noshowmode
 set laststatus=2
+set showtabline=2
 set signcolumn=yes
 
 " Theme settings
@@ -89,6 +90,14 @@ nnoremap <leader>fh <cmd>Telescope help_tags<cr>
 " Terminal in splits
 nnoremap <leader>ts :split<CR>:terminal<CR>i
 nnoremap <leader>tv :vsplit<CR>:terminal<CR>i
+
+" Buffers 
+nnoremap <Tab> :BufferLineCycleNext<CR>
+nnoremap <S-Tab> :BufferLineCyclePrev<CR>
+
+" Definition in split 
+nnoremap <leader>sd :split<CR>:lua vim.lsp.buf.definition()<CR>
+nnoremap <leader>sv :vsplit<CR>:lua vim.lsp.buf.definition()<CR>
 
 " Quick file navigation
 nnoremap <leader>fs :split<CR>:Telescope find_files<CR>
@@ -115,7 +124,6 @@ nnoremap <leader>cm <cmd>Telescope commands<CR>
 nnoremap <leader>km <cmd>Telescope keymaps<CR>                   
 nnoremap <leader>sh <cmd>Telescope search_history<CR>           
 
-
 " Quick help
 nnoremap <leader>hs :split<CR>:Telescope help_tags<CR>
 
@@ -132,11 +140,29 @@ nnoremap <leader>t :Twilight<CR>
 " Lua configuration
 lua << EOF
 pcall(require, 'impatient')
-local nvim_lsp = require('lspconfig')
-nvim_lsp.gopls.setup{}
-nvim_lsp.clangd.setup{}
-nvim_lsp.tsserver = nil
-nvim_lsp.ts_ls.setup{}
+local lspconfig = require('lspconfig')
+
+-- Correctly setup LSP servers
+local ts = lspconfig.ts_ls or lspconfig.tsserver
+ts.setup({})
+lspconfig.gopls.setup {}
+lspconfig.clangd.setup {}
+
+require('lualine').setup({
+  options = {
+    theme = 'nightfly',
+    section_separators = '',
+    component_separators = '',
+  },
+})
+
+require("bufferline").setup({
+  options = {
+    mode = "buffers",
+    separator_style = "slant",
+    diagnostics = "nvim_lsp",
+  },
+})
 
 require("nvim-surround").setup({})
 require('nvim-autopairs').setup({})
@@ -163,6 +189,27 @@ cmp.setup({
   })
 })
 
+-- Prettier autoformat on save using null-ls
+local null_ls = require("null-ls")
+local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+null_ls.setup({
+  sources = {
+    null_ls.builtins.formatting.prettier,
+  },
+  on_attach = function(client, bufnr)
+    if client.supports_method("textDocument/formatting") then
+      vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+      vim.api.nvim_create_autocmd("BufWritePre", {
+        group = augroup,
+        buffer = bufnr,
+        callback = function()
+          vim.lsp.buf.format({ bufnr = bufnr })
+        end,
+      })
+    end
+  end,
+})
+
 -- Toggleterm terminals with auto-close
 local Terminal = require("toggleterm.terminal").Terminal
 local lazygit = Terminal:new({ cmd = "lazygit", direction = "float", close_on_exit = true })
@@ -172,6 +219,7 @@ local htop = Terminal:new({ cmd = "htop", direction = "float", close_on_exit = t
 vim.keymap.set("n", "<leader>lg", function() lazygit:toggle() end, { desc = "Lazygit (float)" })
 vim.keymap.set("n", "<leader>lf", function() lf:toggle() end, { desc = "LF File Manager (float)" })
 vim.keymap.set("n", "<leader>ht", function() htop:toggle() end, { desc = "Htop (float)" })
+vim.keymap.set("n", "gd", "<cmd>lua vim.lsp.buf.definition()<CR>", { noremap = true, silent = true })
 
 -- Alpha Dashboard
 local alpha = require("alpha")
@@ -200,9 +248,9 @@ dashboard.section.buttons.val = {
   dashboard.button("r", "🕘  Recent files", ":Telescope oldfiles<CR>"),
   dashboard.button("g", "🔍  Grep text", ":Telescope live_grep<CR>"),
   dashboard.button("c", "   Edit config", ":e ~/.config/nvim/init.vim<CR>"),
-dashboard.button("l", "🧠  Lazygit", function() vim.schedule(function() lazygit:toggle() end) end),
-dashboard.button("e", "📁  LF File Explorer", function() vim.schedule(function() lf:toggle() end) end),
-dashboard.button("h", "📊  Htop Monitor", function() vim.schedule(function() htop:toggle() end) end),
+  dashboard.button("l", "🧠  Lazygit", function() vim.schedule(function() lazygit:toggle() end) end),
+  dashboard.button("e", "📁  LF File Explorer", function() vim.schedule(function() lf:toggle() end) end),
+  dashboard.button("h", "📊  Htop Monitor", function() vim.schedule(function() htop:toggle() end) end),
   dashboard.button("q", "❌  Quit Neovim", ":qa<CR>"),
 }
 
@@ -215,3 +263,4 @@ end
 
 alpha.setup(dashboard.opts)
 EOF
+
